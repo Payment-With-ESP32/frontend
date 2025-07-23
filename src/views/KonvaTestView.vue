@@ -1,49 +1,75 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useImage } from 'vue-konva'
-import axios from 'axios'
+import axiosInstance from '@/utils/axios-instance'
 import type { SlaveResponse, SlaveType } from '@/types/slave-type'
 import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
+import type { MasterMacResponse } from '@/types/master-mac'
 
-const [floorPlanSrc] = useImage('/287682_100321_441.png')
+const imageSrc = ref<string>('/287682_100321_441.png')
+const [image] = useImage(imageSrc)
+
 const [targetSrc] = useImage('/red-dot.png')
 
-const floorPlanImage = ref({})
+const floorPlaneImage = ref({})
 
 const slaves = ref<SlaveType[]>([])
 const floor = ref<number>(-1)
 const width = 600
 const height = ref<number>(0)
-const popupPosition = ref<{ x: number; y: number } | null>(null)
+const popupPosition = ref<{ x: number; y: number; floor: number } | null>(null)
 
 const selectedMacAddress = ref<string>('')
+const toChangeFloor = ref<number>(-1)
 const toUpdateMacAddress = ref<string>('')
 const appendTargetMacAddress = ref<string>('')
+const masterMacAddress = ref<string>('')
+const macPlaceHolder = computed(() => `현재 MAC: ${masterMacAddress.value}`)
+const prelongTime = ref<number>(1)
 
-const filteredSlaves = computed(() => {
-  return slaves.value.filter((slave) => slave.position.floor === floor.value)
-})
+const filteredSlaves = computed(() =>
+  slaves.value.filter((slave) => slave.position.floor === floor.value),
+)
+const selectedMacConvertColon = computed(() => selectedMacAddress.value.replace(/:/g, '-'))
 
-axios
-  .get<SlaveResponse>('http://localhost:8080/esp32', {
-    timeout: 3000,
-  })
-  .then((response) => response.data)
-  .then((data) => {
-    slaves.value = data.slaves.map((slave) => {
-      return {
-        ...slave,
-        macAddress: slave.macAddress.toLowerCase(),
-      }
+try {
+  axiosInstance
+    .get<SlaveResponse>('/esp32/slaves', {
+      timeout: 1000,
     })
-  })
-  .catch((err) => console.error(err))
+    .then((response) => response.data)
+    .then((data) => {
+      slaves.value = data.slaves.map((slave) => {
+        return {
+          ...slave,
+          macAddress: slave.macAddress.toLowerCase(),
+        }
+      })
+    })
+} catch (err) {
+  console.error('Error fetching slaves:', err)
+  slaves.value = []
+}
 
-watch(floorPlanSrc, (img) => {
+try {
+  axiosInstance
+    .get<MasterMacResponse>('/esp32/master', {
+      timeout: 1000,
+    })
+    .then((response) => response.data)
+    .then((data) => {
+      masterMacAddress.value = data.macAddress.trim().toLowerCase()
+    })
+} catch (err) {
+  console.error('Error fetching master MAC address:', err)
+  masterMacAddress.value = ''
+}
+
+watch(image, (img) => {
   if (img) {
     height.value = img.naturalHeight * (width / img.naturalWidth)
-    floorPlanImage.value = {
+    floorPlaneImage.value = {
       image: img,
       x: 0,
       y: 0,
@@ -53,16 +79,28 @@ watch(floorPlanSrc, (img) => {
   }
 })
 
+watch(toChangeFloor, (upcoming, old) => {
+  if (upcoming === 0) {
+    if (old < 0) toChangeFloor.value = 1
+    else toChangeFloor.value = -1
+  }
+})
+
+watch(popupPosition, (position) => {
+  if (position) toChangeFloor.value = position.floor
+})
+
+watch(prelongTime, (upcoming) => {
+  if (upcoming < 1) prelongTime.value = 1
+})
+
 const addNewNode = () => {
   try {
     const macAddress = appendTargetMacAddress.value.trim().toLowerCase()
-    if (!macRegex.test(macAddress)) {
-      alert('Invalid MAC address format. Please use XX:XX:XX:XX:XX:XX.')
-      return
-    }
+    if (!macRegex.test(macAddress)) return
     const slave = slaves.value.find((s) => s.macAddress.trim() === macAddress)
     if (!slave) {
-      axios.post('http://localhost:8080/esp32', {
+      axiosInstance.post('/esp32', {
         macAddress: appendTargetMacAddress,
         positionX: 100,
         positionY: 100,
@@ -75,7 +113,6 @@ const addNewNode = () => {
     }
   } catch (e) {
     console.error('Error adding new node:', e)
-    alert('Failed to add new node. Please check the console for details.')
   } finally {
     appendTargetMacAddress.value = ''
   }
@@ -88,7 +125,7 @@ const changeNode = async () => {
   const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
   if (idx !== -1) {
     slaves.value[idx].macAddress = newMacAddress
-    await axios.put(`http://localhost:8080/esp32/${selectedMacAddress.value}`, {
+    await axiosInstance.put(`/esp32/${selectedMacConvertColon.value}`, {
       toMac: newMacAddress,
     })
     selectedMacAddress.value = newMacAddress
@@ -100,21 +137,56 @@ const deleteNode = async () => {
   const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
   if (idx !== -1) {
     slaves.value.splice(idx, 1)
-    await axios.delete(`http://localhost:8080/esp32/${selectedMacAddress.value}`)
+    await axiosInstance.delete(`/esp32/${selectedMacConvertColon.value}`)
     selectedMacAddress.value = ''
     popupPosition.value = null
   }
 }
+
+const changeFloor = async () => {
+  const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
+  if (idx !== -1) {
+    if (toChangeFloor.value === 0) toChangeFloor.value = 1
+    slaves.value[idx].position.floor = toChangeFloor.value
+    await axiosInstance.patch(`/esp32`, {
+      positionX: slaves.value[idx].position.x,
+      positionY: slaves.value[idx].position.y,
+      floor: toChangeFloor.value,
+      macAddress: selectedMacAddress.value,
+    })
+    selectedMacAddress.value = ''
+    popupPosition.value = null
+  }
+}
+
+const submitTime = async (prelong: number = 0) => {
+  await axiosInstance.post(`/esp32/${selectedMacAddress.value}`, {
+    time: prelong,
+  })
+}
 </script>
 <template>
   <div z-index="1" class="konva-test">
+    <div>
+      <h2>master mac 수정</h2>
+      <input type="text" v-model="toUpdateMacAddress" :placeholder="macPlaceHolder" />
+      <button
+        @click="
+          axiosInstance.post('/esp32/master', {
+            toMac: toUpdateMacAddress.trim().toLowerCase(),
+          })
+        "
+      >
+        제출
+      </button>
+    </div>
     <v-stage
       :config="{ width, height }"
       id="konva-root-stage"
       @click="() => (popupPosition = null)"
     >
       <v-layer>
-        <v-image v-if="floorPlanSrc" :config="floorPlanImage"></v-image>
+        <v-image v-if="image" :config="floorPlaneImage"></v-image>
         <div v-if="targetSrc">
           <NodePosition
             v-for="(slave, idx) in filteredSlaves"
@@ -135,7 +207,6 @@ const deleteNode = async () => {
             @update:popupPosition="(position) => (popupPosition = position)"
             @update:deleteMacAddress="
               (macAddress) => {
-                console.log(macAddress)
                 selectedMacAddress = macAddress
               }
             "
@@ -156,27 +227,43 @@ const deleteNode = async () => {
       "
       :style="{ left: popupPosition.x + 'px', top: popupPosition.y + 'px' }"
     >
-      <h3>현재 MAC 주소: {{ selectedMacAddress }}</h3>
+      <h3>MAC 주소: {{ selectedMacAddress }}</h3>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
       <h3>MAC 주소 수정</h3>
       <input type="text" v-model="toUpdateMacAddress" placeholder="새 MAC 주소를 입력하세요" />
-      <button @click="changeNode()">제출</button>
+      <button @click="changeNode()">수정</button>
+      <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
+      <h3>층 변경</h3>
+      <input type="number" v-model="toChangeFloor" placeholder="변경할 층을 입력하세요" />
+      <button @click="changeFloor()">변경</button>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
       <h3>노드 삭제</h3>
       <button @click="deleteNode()">삭제</button>
+      <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
+      <h3>노드 상태 변경 - 시간</h3>
+      <input type="number" v-model="prelongTime" placeholder="연장할 시간을 적어주세요!" />
+      <button @click="submitTime(prelongTime)">연장</button>
+      <br />
+      <button @click="submitTime(0)">상시 켜짐</button><button @click="submitTime(-1)">끄기</button>
     </div>
     <div>
       <div>
+        <h2>노드 추가</h2>
         <input type="text" v-model="appendTargetMacAddress" />
         <button @click="addNewNode()">제출</button>
       </div>
 
       <div>
-        <p>current floor: {{ floor }}</p>
-        <button @click="floor += 1">Up</button>
-        <button @click="floor -= 1">Down</button>
+        <h2 style="display: inline-block">현재 층: {{ floor }}</h2>
+        <button @click="() => (floor = floor + 1 == 0 ? 1 : floor + 1)">Up</button>
+        <button @click="() => (floor = floor - 1 == 0 ? -1 : floor - 1)">Down</button>
         <button @click="floor = -1">Reset</button>
       </div>
     </div>
+
+    <select @change="(e) => (imageSrc = `/${e.target.value}`)">
+      <option value="287682_100321_441.png">img 1</option>
+      <option value="test-image.png">img 2</option>
+    </select>
   </div>
 </template>
