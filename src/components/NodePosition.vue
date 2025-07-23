@@ -23,8 +23,9 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:nodePosition', 'update:popupPosition', 'update:deleteMacAddress'])
+const emit = defineEmits(['update:nodePosition', 'update:popupPosition', 'update:targetMacAddress'])
 
+const macAddressId = props.info.macAddress.replace(':', '-')
 const rootStage = stages.find((s) => s.id() === 'konva-root-stage')
 const BALL_SIZE = 50
 const macAddress = props.info.macAddress.toLowerCase()
@@ -53,13 +54,13 @@ const groupConfig = {
       y: Math.min(maxHeight, Math.max(0, pos.y)),
     }
   },
-  id: `group-${macAddress}`,
+  id: `group-${macAddressId}`,
 }
 
 const imgConfig = {
   ...defaultVConfig,
   image: props.imgSrc,
-  id: `img-${macAddress}`,
+  id: `img-${macAddressId}`,
 }
 
 const macTxtConfig = {
@@ -68,42 +69,49 @@ const macTxtConfig = {
   fontSize: 12,
   fill: 'white',
   verticalAlign: 'middle',
-  id: `mac-${macAddress}`,
+  id: `mac-${macAddressId}`,
 }
 
-const onIconMove = async (e: Konva.KonvaEventObject<DragEvent>) => {
+const commonProps = {
+  macAddress: props.info.macAddress,
+  floor: props.info.position.floor,
+}
+
+const onIconMoveEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
   const dom = e.evt
   const { x, y } = e.target.position()
+
   await axiosInstance.patch('/esp32', {
+    ...commonProps,
     positionX: x,
     positionY: y,
-    macAddress: props.info.macAddress,
-    floor: props.info.position.floor,
   })
   emit('update:nodePosition', {
-    macAddress: props.info.macAddress,
+    ...commonProps,
     x,
     y,
-    floor: props.info.position.floor,
   })
-  emit('update:popupPosition', { x: dom.clientX, y: dom.clientY, floor: props.info.position.floor })
+  console.log(props.popupPosition)
+  if (props.popupPosition) updatePopupPosition(dom)
 }
 
 const onClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
   const dom = e.evt
   e.cancelBubble = true
-  if (dom) {
-    emit('update:popupPosition', {
-      x: dom.clientX,
-      y: dom.clientY,
-      floor: props.info.position.floor,
-    })
-    emit('update:deleteMacAddress', props.info.macAddress)
-  }
+  updatePopupPosition(dom)
+  emit('update:targetMacAddress', props.info.macAddress)
+}
+
+const updatePopupPosition = (dom: MouseEvent | DragEvent) => {
+  emit('update:popupPosition', {
+    x: dom.clientX,
+    y: dom.clientY,
+    floor: props.info.position.floor,
+  })
 }
 </script>
 <template>
-  <v-group :config="groupConfig" @dragend="onIconMove" draggable="true" @click="onClick">
+  <v-group :config="groupConfig" @dragend="onIconMoveEnd" draggable="true" @click="onClick">
     <v-image :config="imgConfig"></v-image>
     <v-text :config="macTxtConfig"></v-text>
   </v-group>
