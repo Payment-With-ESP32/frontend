@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+    <script type="text/javascript" src="https://cdn.iamport.kr/v1/iamport.js"></script>
+</head>
+
+<body>
+    <select id="position" onchange="testing()">
+        <option value="0" selected=selected>자리 1</option>
+        <option value="1">자리 2</option>
+    </select>
+    <button onclick="testing()">드롭다운</button>
+    <button id="pay-button" onclick="requestPay()">결제하기</button>
+
+    <script>
+        IMP.init("imp27771168")
+        var e = document.getElementById("position")
+
+        async function requestPay() {
+            const merchantUid = `p-${crypto.randomUUID()}`
+
+            fetch('http://localhost:8080/payment/prepare',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        merchantUid: merchantUid,
+                        amount: 1000,
+                        poistion: parseInt(e.value),
+                    })
+                }
+            ).then(resonse => console.log("결제 준비"))
+
+            IMP.request_pay({
+                channelKey: "channel-key-b3ba68da-5cbb-4150-bca0-5a2699afa612",
+                pay_method: "card",
+                merchant_uid: merchantUid,
+                name: "주문명:결제테스트",
+                amount: 1000,
+            }, async response => {
+                if (response.error_code != null) {
+                    return alert(`결제에 실패하였습니다. 에러 내용: ${response.error_msg}`);
+                }
+
+                const notified = await fetch('http://localhost:8080/payment/complete',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            impUid: response.imp_uid,
+                            merchantUid: merchantUid,
+                            amount: response.paid_amount
+                        })
+                    }
+                )
+
+                console.log("결제 완료", notified)
+            })
+        }
+    </script>
+</body>
+
+</html>
