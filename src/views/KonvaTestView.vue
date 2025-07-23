@@ -15,13 +15,13 @@ const [targetSrc] = useImage('/red-dot.png')
 const floorPlaneImage = ref({})
 
 const slaves = ref<SlaveType[]>([])
-const floor = ref<number>(-1)
+const floor = ref<number>(1)
 const width = 600
 const height = ref<number>(0)
 const popupPosition = ref<{ x: number; y: number; floor: number } | null>(null)
 
 const selectedMacAddress = ref<string>('')
-const toChangeFloor = ref<number>(-1)
+const toChangeFloor = ref<number>(1)
 const toUpdateMacAddress = ref<string>('')
 const appendTargetMacAddress = ref<string>('')
 const masterMacAddress = ref<string>('')
@@ -94,22 +94,27 @@ watch(prelongTime, (upcoming) => {
   if (upcoming < 1) prelongTime.value = 1
 })
 
-const addNewNode = () => {
+const addNewNode = async () => {
   try {
     const macAddress = appendTargetMacAddress.value.trim().toLowerCase()
-    if (!macRegex.test(macAddress)) return
+    if (!macRegex.test(macAddress)) {
+      alert('정규식에 맞지 않습니다.')
+      return
+    }
     const slave = slaves.value.find((s) => s.macAddress.trim() === macAddress)
     if (!slave) {
-      axiosInstance.post('/esp32', {
-        macAddress: appendTargetMacAddress,
+      await axiosInstance.post('/esp32', {
+        macAddress: appendTargetMacAddress.value,
         positionX: 100,
         positionY: 100,
         floor: floor.value,
       })
       slaves.value.push({
         macAddress: appendTargetMacAddress.value,
-        position: { x: 100, y: 100, floor: -1 },
+        position: { x: 100, y: 100, floor: floor.value },
       })
+    } else {
+      alert(`해당 MAC 주소는 이미 존재합니다: ${appendTargetMacAddress.value}`)
     }
   } catch (e) {
     console.error('Error adding new node:', e)
@@ -121,7 +126,10 @@ const addNewNode = () => {
 const changeNode = async () => {
   if (!selectedMacAddress.value) return
   const newMacAddress = toUpdateMacAddress.value.trim().toLowerCase()
-  if (!macRegex.test(newMacAddress)) return
+  if (!macRegex.test(newMacAddress)) {
+    alert('정규식에 맞지 않습니다.')
+    return
+  }
   const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
   if (idx !== -1) {
     slaves.value[idx].macAddress = newMacAddress
@@ -159,6 +167,18 @@ const changeFloor = async () => {
   }
 }
 
+const updateMasterMac = async () => {
+  const toMac = toUpdateMacAddress.value.trim().toLowerCase()
+  if (macRegex.test(toMac)) {
+    alert('정규식에 맞지 않습니다.')
+    return
+  }
+
+  axiosInstance.post('/esp32/master', {
+    toMac,
+  })
+}
+
 const submitTime = async (prelong: number = 0) => {
   await axiosInstance.post(`/esp32/${selectedMacAddress.value}`, {
     time: prelong,
@@ -170,15 +190,7 @@ const submitTime = async (prelong: number = 0) => {
     <div>
       <h2>master mac 수정</h2>
       <input type="text" v-model="toUpdateMacAddress" :placeholder="macPlaceHolder" />
-      <button
-        @click="
-          axiosInstance.post('/esp32/master', {
-            toMac: toUpdateMacAddress.trim().toLowerCase(),
-          })
-        "
-      >
-        제출
-      </button>
+      <button @click="updateMasterMac()">제출</button>
     </div>
     <v-stage
       :config="{ width, height }"
@@ -194,7 +206,7 @@ const submitTime = async (prelong: number = 0) => {
             :index="idx"
             :info="slave"
             :imgSrc="targetSrc"
-            v-model="popupPosition"
+            :popupPosition="popupPosition"
             @update:nodePosition="
               (newPosition) => {
                 const index = slaves.findIndex((s) => s.macAddress === newPosition.macAddress)
@@ -205,7 +217,7 @@ const submitTime = async (prelong: number = 0) => {
               }
             "
             @update:popupPosition="(position) => (popupPosition = position)"
-            @update:deleteMacAddress="
+            @update:targetMacAddress="
               (macAddress) => {
                 selectedMacAddress = macAddress
               }
@@ -225,7 +237,7 @@ const submitTime = async (prelong: number = 0) => {
         padding: 10px;
         color: black;
       "
-      :style="{ left: popupPosition.x + 'px', top: popupPosition.y + 'px' }"
+      :style="{ left: popupPosition.x + 10 + 'px', top: popupPosition.y + 10 + 'px' }"
     >
       <h3>MAC 주소: {{ selectedMacAddress }}</h3>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
@@ -257,11 +269,18 @@ const submitTime = async (prelong: number = 0) => {
         <h2 style="display: inline-block">현재 층: {{ floor }}</h2>
         <button @click="() => (floor = floor + 1 == 0 ? 1 : floor + 1)">Up</button>
         <button @click="() => (floor = floor - 1 == 0 ? -1 : floor - 1)">Down</button>
-        <button @click="floor = -1">Reset</button>
+        <button @click="floor = 1">Reset</button>
       </div>
     </div>
 
-    <select @change="(e) => (imageSrc = `/${e.target.value}`)">
+    <select
+      @change="
+        (e) => {
+          const target = e.target as HTMLSelectElement
+          if (target) imageSrc = `/${target.value}`
+        }
+      "
+    >
       <option value="287682_100321_441.png">img 1</option>
       <option value="test-image.png">img 2</option>
     </select>
