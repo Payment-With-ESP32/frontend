@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import type { SlaveType } from '@/types/slave-type'
 import type Konva from 'konva'
-import axios from 'axios'
 import { stages } from 'konva/lib/Stage'
-import { macRegex } from '@/utils/regexes'
+import axiosInstance from '@/utils/axios-instance'
 
 const props = defineProps({
   index: {
@@ -73,8 +72,9 @@ const macTxtConfig = {
 }
 
 const onIconMove = async (e: Konva.KonvaEventObject<DragEvent>) => {
+  const dom = e.evt
   const { x, y } = e.target.position()
-  await axios.patch(`http://localhost:8080/esp32`, {
+  await axiosInstance.patch('/esp32', {
     positionX: x,
     positionY: y,
     macAddress: props.info.macAddress,
@@ -86,13 +86,18 @@ const onIconMove = async (e: Konva.KonvaEventObject<DragEvent>) => {
     y,
     floor: props.info.position.floor,
   })
+  emit('update:popupPosition', { x: dom.clientX, y: dom.clientY, floor: props.info.position.floor })
 }
 
 const onClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
   const dom = e.evt
   e.cancelBubble = true
   if (dom) {
-    emit('update:popupPosition', { x: dom.clientX, y: dom.clientY })
+    emit('update:popupPosition', {
+      x: dom.clientX,
+      y: dom.clientY,
+      floor: props.info.position.floor,
+    })
     emit('update:deleteMacAddress', props.info.macAddress)
   }
 }
