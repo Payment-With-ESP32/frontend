@@ -11,7 +11,7 @@ import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
 export default defineConfigWithVueTs(
   {
     name: 'app/files-to-lint',
-    // @ts-ignore
+    // @ts-expect-error 실제로는 저 File들이 있어야 하는데, 번들러에서는 없어야된다고 함
     files: ['**/*.{ts,mts,tsx,vue}'],
   },
 
