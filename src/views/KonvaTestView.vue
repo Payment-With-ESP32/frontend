@@ -7,12 +7,13 @@ import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
 import type { MasterMacResponse } from '@/types/master-mac'
 
-const imageSrc = ref<string>('/287682_100321_441.png')
+const imageSrc = ref<string>('')
 const [image] = useImage(imageSrc)
 
 const [targetSrc] = useImage('/red-dot.png')
 
-const floorPlaneImage = ref({})
+const floorPlaneImageConfig = ref({})
+const floorImageSrcs = ref<string[]>([])
 
 const slaves = ref<SlaveType[]>([])
 const floor = ref<number>(1)
@@ -31,7 +32,7 @@ const prelongTime = ref<number>(1)
 const filteredSlaves = computed(() =>
   slaves.value.filter((slave) => slave.position.floor === floor.value),
 )
-const selectedMacConvertColon = computed(() => selectedMacAddress.value.replace(/:/g, '-'))
+const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddress.value))
 
 try {
   axiosInstance
@@ -66,10 +67,24 @@ try {
   masterMacAddress.value = ''
 }
 
+try {
+  axiosInstance
+    .get<string[]>('/esp32/images', {
+      timeout: 2000,
+    })
+    .then((response) => response.data)
+    .then((data) => {
+      floorImageSrcs.value = [...floorImageSrcs.value, ...data]
+      if (data.length > 0) imageSrc.value = `/${data[0]}`
+    })
+} catch (e) {
+  console.error(e)
+}
+
 watch(image, (img) => {
   if (img) {
     height.value = img.naturalHeight * (width / img.naturalWidth)
-    floorPlaneImage.value = {
+    floorPlaneImageConfig.value = {
       image: img,
       x: 0,
       y: 0,
@@ -133,7 +148,7 @@ const changeNode = async () => {
   const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
   if (idx !== -1) {
     slaves.value[idx].macAddress = newMacAddress
-    await axiosInstance.put(`/esp32/${selectedMacConvertColon.value}`, {
+    await axiosInstance.put(`/esp32/${selectedMacURLEncoded.value}`, {
       toMac: newMacAddress,
     })
     selectedMacAddress.value = newMacAddress
@@ -145,7 +160,7 @@ const deleteNode = async () => {
   const idx = slaves.value.findIndex((s) => s.macAddress === selectedMacAddress.value)
   if (idx !== -1) {
     slaves.value.splice(idx, 1)
-    await axiosInstance.delete(`/esp32/${selectedMacConvertColon.value}`)
+    await axiosInstance.delete(`/esp32/${selectedMacURLEncoded.value}`)
     selectedMacAddress.value = ''
     popupPosition.value = null
   }
@@ -184,6 +199,57 @@ const submitTime = async (prelong: number = 0) => {
     time: prelong,
   })
 }
+
+const selectedFile = ref<File | null>(null)
+const onFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (target) {
+    const files = target.files
+    if (files) selectedFile.value = files[0]
+  }
+}
+const uploadImage = async () => {
+  if (!selectedFile.value) return
+
+  const formData = new FormData()
+  formData.append('file', selectedFile.value)
+
+  try {
+    const filename = selectedFile.value.name
+    if (!floorImageSrcs.value.includes(filename)) {
+      await axiosInstance.post('/esp32/image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      imageSrc.value = filename
+      floorImageSrcs.value = [...floorImageSrcs.value, `${filename}`]
+    }
+  } catch (err) {
+    console.error('업로드 실패: ', err)
+  }
+}
+
+const deleteImage = async () => {
+  if (imageSrc.value) {
+    try {
+      const targetFileName = imageSrc.value.startsWith('/')
+        ? imageSrc.value.replace('/', '')
+        : imageSrc.value
+      const encodedFilename = encodeURIComponent(targetFileName)
+      await axiosInstance.delete(`/esp32/image/${encodedFilename}`)
+
+      const targetImageIndex = floorImageSrcs.value.findIndex((item) => item === targetFileName)
+      floorImageSrcs.value.splice(targetImageIndex, 1)
+      imageSrc.value =
+        floorImageSrcs.value.length !== 0
+          ? floorImageSrcs.value[Math.max(targetImageIndex - 1, 0)]
+          : ''
+    } catch (e) {
+      console.error(e)
+    }
+  }
+}
 </script>
 <template>
   <div z-index="1" class="konva-test">
@@ -198,7 +264,7 @@ const submitTime = async (prelong: number = 0) => {
       @click="() => (popupPosition = null)"
     >
       <v-layer>
-        <v-image v-if="image" :config="floorPlaneImage"></v-image>
+        <v-image v-if="image" :config="floorPlaneImageConfig"></v-image>
         <div v-if="targetSrc">
           <NodePosition
             v-for="(slave, idx) in filteredSlaves"
@@ -273,16 +339,30 @@ const submitTime = async (prelong: number = 0) => {
       </div>
     </div>
 
-    <select
-      @change="
-        (e) => {
-          const target = e.target as HTMLSelectElement
-          if (target) imageSrc = `/${target.value}`
-        }
-      "
-    >
-      <option value="287682_100321_441.png">img 1</option>
-      <option value="test-image.png">img 2</option>
-    </select>
+    <div>
+      <h3>이미지 관리</h3>
+      <p>업로드</p>
+      <input type="file" @change="onFileChange" />
+      <button @click="uploadImage">업로드</button>
+
+      <p>도면 선택</p>
+      <select
+        @change="
+          (e) => {
+            const target = e.target as HTMLSelectElement
+            if (target) imageSrc = `/${target.value}`
+          }
+        "
+      >
+        <option
+          v-for="filename in floorImageSrcs"
+          :key="filename"
+          :selected="filename === imageSrc"
+        >
+          {{ filename }}
+        </option>
+      </select>
+      <button @click="deleteImage">삭제</button>
+    </div>
   </div>
 </template>
