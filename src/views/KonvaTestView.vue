@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useImage } from 'vue-konva'
 import axiosInstance from '@/utils/axios-instance'
 import type { SlaveResponse, SlaveType } from '@/types/slave-type'
@@ -7,9 +7,9 @@ import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
 import type { MasterMacResponse } from '@/types/master-mac'
 
-const imageSrc = ref<string>('')
+const defaultImagePath = '/default.png'
+const imageSrc = ref<string>(defaultImagePath)
 const [image] = useImage(imageSrc)
-
 const [targetSrc] = useImage('/red-dot.png')
 
 const floorPlaneImageConfig = ref({})
@@ -17,79 +17,63 @@ const floorImageSrcs = ref<string[]>([])
 
 const slaves = ref<SlaveType[]>([])
 const floor = ref<number>(1)
-const width = 600
-const height = ref<number>(0)
+const imageWidth = 600
+const imageHeight = ref<number>(0)
 const popupPosition = ref<{ x: number; y: number; floor: number } | null>(null)
-
 const selectedMacAddress = ref<string>('')
+
 const toChangeFloor = ref<number>(1)
-const toUpdateMacAddress = ref<string>('')
-const appendTargetMacAddress = ref<string>('')
+const toUpdateNodeMacAddress = ref<string>('')
+const toUpdateMasterMacAddress = ref<string>('')
+const toAppendTargetMacAddress = ref<string>('')
 const masterMacAddress = ref<string>('')
-const macPlaceHolder = computed(() => `현재 MAC: ${masterMacAddress.value}`)
 const prelongTime = ref<number>(1)
 
+const macPlaceHolder = computed(() => `현재 MAC: ${masterMacAddress.value}`)
 const filteredSlaves = computed(() =>
   slaves.value.filter((slave) => slave.position.floor === floor.value),
 )
 const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddress.value))
 
-try {
-  axiosInstance
-    .get<SlaveResponse>('/esp32/slaves', {
-      timeout: 1000,
+onMounted(async () => {
+  try {
+    const { data } = await axiosInstance.get<SlaveResponse>('/esp32/slaves')
+    slaves.value = data.slaves.map((slave) => {
+      return { ...slave, macAddress: slave.macAddress.trim().toLocaleLowerCase() }
     })
-    .then((response) => response.data)
-    .then((data) => {
-      slaves.value = data.slaves.map((slave) => {
-        return {
-          ...slave,
-          macAddress: slave.macAddress.toLowerCase(),
-        }
-      })
-    })
-} catch (err) {
-  console.error('Error fetching slaves:', err)
-  slaves.value = []
-}
+  } catch (err) {
+    console.error('Error fetching slaves:', err)
+    slaves.value = []
+  }
 
-try {
-  axiosInstance
-    .get<MasterMacResponse>('/esp32/master', {
-      timeout: 1000,
-    })
-    .then((response) => response.data)
-    .then((data) => {
-      masterMacAddress.value = data.macAddress.trim().toLowerCase()
-    })
-} catch (err) {
-  console.error('Error fetching master MAC address:', err)
-  masterMacAddress.value = ''
-}
+  try {
+    const { data } = await axiosInstance.get<MasterMacResponse>('/esp32/master')
+    masterMacAddress.value = data.macAddress.trim().toLocaleLowerCase()
+  } catch (err) {
+    console.error('Error fetching master MAC address:', err)
+    masterMacAddress.value = ''
+  }
 
-try {
-  axiosInstance
-    .get<string[]>('/esp32/images', {
+  try {
+    const { data } = await axiosInstance.get<string[]>('/esp32/images', {
       timeout: 2000,
     })
-    .then((response) => response.data)
-    .then((data) => {
-      floorImageSrcs.value = [...floorImageSrcs.value, ...data]
-      if (data.length > 0) imageSrc.value = `/${data[0]}`
-    })
-} catch (e) {
-  console.error(e)
-}
+    floorImageSrcs.value = data
+    if (data.length > 0) imageSrc.value = `/${data[0]}`
+  } catch (e) {
+    console.error(e)
+  }
+})
 
 watch(image, (img) => {
   if (img) {
-    height.value = img.naturalHeight * (width / img.naturalWidth)
+    imageHeight.value = img.naturalHeight * (imageWidth / img.naturalWidth)
     floorPlaneImageConfig.value = {
       image: img,
       x: 0,
       y: 0,
-      height: height.value,
-      width: width,
+      height: imageHeight.value,
+      width: imageWidth,
     }
   }
 })
@@ -111,7 +95,7 @@ watch(prelongTime, (upcoming) => {
 
 const addNewNode = async () => {
   try {
-    const macAddress = appendTargetMacAddress.value.trim().toLowerCase()
+    const macAddress = toAppendTargetMacAddress.value.trim().toLowerCase()
     if (!macRegex.test(macAddress)) {
       alert('정규식에 맞지 않습니다.')
       return
@@ -119,28 +103,28 @@ const addNewNode = async () => {
     const slave = slaves.value.find((s) => s.macAddress.trim() === macAddress)
     if (!slave) {
       await axiosInstance.post('/esp32', {
-        macAddress: appendTargetMacAddress.value,
+        macAddress: toAppendTargetMacAddress.value,
         positionX: 100,
         positionY: 100,
         floor: floor.value,
       })
       slaves.value.push({
-        macAddress: appendTargetMacAddress.value,
+        macAddress: toAppendTargetMacAddress.value,
         position: { x: 100, y: 100, floor: floor.value },
       })
     } else {
-      alert(`해당 MAC 주소는 이미 존재합니다: ${appendTargetMacAddress.value}`)
+      alert(`해당 MAC 주소는 이미 존재합니다: ${toAppendTargetMacAddress.value}`)
     }
   } catch (e) {
     console.error('Error adding new node:', e)
   } finally {
-    appendTargetMacAddress.value = ''
+    toAppendTargetMacAddress.value = ''
   }
 }
 
 const changeNode = async () => {
   if (!selectedMacAddress.value) return
-  const newMacAddress = toUpdateMacAddress.value.trim().toLowerCase()
+  const newMacAddress = toUpdateNodeMacAddress.value.trim().toLowerCase()
   if (!macRegex.test(newMacAddress)) {
     alert('정규식에 맞지 않습니다.')
     return
@@ -152,7 +136,7 @@ const changeNode = async () => {
       toMac: newMacAddress,
     })
     selectedMacAddress.value = newMacAddress
-    toUpdateMacAddress.value = ''
+    toUpdateNodeMacAddress.value = ''
   }
 }
 
@@ -183,7 +167,7 @@ const changeFloor = async () => {
 }
 
 const updateMasterMac = async () => {
-  const toMac = toUpdateMacAddress.value.trim().toLowerCase()
+  const toMac = toUpdateMasterMacAddress.value.trim().toLowerCase()
   if (macRegex.test(toMac)) {
     alert('정규식에 맞지 않습니다.')
     return
@@ -244,7 +228,7 @@ const deleteImage = async () => {
       imageSrc.value =
         floorImageSrcs.value.length !== 0
           ? floorImageSrcs.value[Math.max(targetImageIndex - 1, 0)]
-          : ''
+          : defaultImagePath
     } catch (e) {
       console.error(e)
     }
@@ -255,11 +239,11 @@ const deleteImage = async () => {
   <div z-index="1" class="konva-test">
     <div>
       <h2>master mac 수정</h2>
-      <input type="text" v-model="toUpdateMacAddress" :placeholder="macPlaceHolder" />
+      <input type="text" v-model="toUpdateMasterMacAddress" :placeholder="macPlaceHolder" />
       <button @click="updateMasterMac()">제출</button>
     </div>
     <v-stage
-      :config="{ width, height }"
+      :config="{ width: imageWidth, height: imageHeight }"
       id="konva-root-stage"
       @click="() => (popupPosition = null)"
     >
@@ -308,7 +292,7 @@ const deleteImage = async () => {
       <h3>MAC 주소: {{ selectedMacAddress }}</h3>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
       <h3>MAC 주소 수정</h3>
-      <input type="text" v-model="toUpdateMacAddress" placeholder="새 MAC 주소를 입력하세요" />
+      <input type="text" v-model="toUpdateNodeMacAddress" placeholder="새 MAC 주소를 입력하세요" />
       <button @click="changeNode()">수정</button>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
       <h3>층 변경</h3>
@@ -327,12 +311,12 @@ const deleteImage = async () => {
     <div>
       <div>
         <h2>노드 추가</h2>
-        <input type="text" v-model="appendTargetMacAddress" />
+        <input type="text" v-model="toAppendTargetMacAddress" />
         <button @click="addNewNode()">제출</button>
       </div>
 
       <div>
-        <h2 style="display: inline-block">현재 층: {{ floor }}</h2>
+        <h2 style="display: inline-block; width: 5em">현재 층: {{ floor }}</h2>
         <button @click="() => (floor = floor + 1 == 0 ? 1 : floor + 1)">Up</button>
         <button @click="() => (floor = floor - 1 == 0 ? -1 : floor - 1)">Down</button>
         <button @click="floor = 1">Reset</button>
@@ -347,6 +331,7 @@ const deleteImage = async () => {
 
       <p>도면 선택</p>
       <select
+        style="min-width: 15em"
         @change="
           (e) => {
             const target = e.target as HTMLSelectElement
