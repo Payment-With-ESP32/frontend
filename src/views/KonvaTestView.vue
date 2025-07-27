@@ -6,6 +6,7 @@ import type { SlaveResponse, SlaveType } from '@/types/slave-type'
 import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
 import type { MasterMacResponse } from '@/types/master-mac'
+import { useRouter } from 'vue-router'
 
 const defaultImagePath = '/default.png'
 const imageSrc = ref<string>(defaultImagePath)
@@ -36,6 +37,18 @@ const filteredSlaves = computed(() =>
 const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddress.value))
 
 onMounted(async () => {
+  const router = useRouter()
+  const password = prompt('비밀번호를 입력해주세요')
+  console.log(password)
+
+  try {
+    await axiosInstance.post('/admin/login', { password })
+  } catch (e) {
+    console.error(e)
+    router.replace('/')
+    return
+  }
+
   try {
     const { data } = await axiosInstance.get<SlaveResponse>('/esp32/slaves')
     slaves.value = data.slaves.map((slave) => {
@@ -168,14 +181,30 @@ const changeFloor = async () => {
 
 const updateMasterMac = async () => {
   const toMac = toUpdateMasterMacAddress.value.trim().toLowerCase()
-  if (macRegex.test(toMac)) {
+  if (!macRegex.test(toMac)) {
     alert('정규식에 맞지 않습니다.')
     return
   }
 
-  axiosInstance.post('/esp32/master', {
-    toMac,
-  })
+  try {
+    await axiosInstance.post('/esp32/master', {
+      toMac,
+    })
+    console.log('change succeed')
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const reconnectMaster = async () => {
+  try {
+    await axiosInstance.post(`/esp32/master`, {
+      toMac: masterMacAddress.value,
+    })
+    console.log('reconnect succeed')
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const submitTime = async (prelong: number = 0) => {
@@ -234,13 +263,44 @@ const deleteImage = async () => {
     }
   }
 }
+
+const origPassword = ref('')
+const toPassword = ref('')
+const rePassword = ref('')
 </script>
 <template>
   <div z-index="1" class="konva-test">
     <div>
+      <h2>Root 비밀번호 수정</h2>
+      <input type="password" v-model="origPassword" placeholder="기존 비밀번호 입력" />
+      <input type="password" v-model="toPassword" placeholder="비밀번호 입력" />
+      <input type="password" v-model="rePassword" placeholder="비밀번호 확인" />
+      <button
+        @click="
+          async () => {
+            if (toPassword !== rePassword) {
+              console.error('비밀번호 확인과 바꿀 비밀번호가 맞는지 확인하세요')
+              return
+            }
+            try {
+              await axiosInstance.patch('/admin', {
+                from: origPassword,
+                to: toPassword,
+              })
+            } catch (e) {
+              console.error('기존 비밀번호가 맞는지 확인')
+            }
+          }
+        "
+      >
+        제출
+      </button>
+    </div>
+    <div>
       <h2>master mac 수정</h2>
       <input type="text" v-model="toUpdateMasterMacAddress" :placeholder="macPlaceHolder" />
       <button @click="updateMasterMac()">제출</button>
+      <button @click="reconnectMaster()">master 재연동</button>
     </div>
     <v-stage
       :config="{ width: imageWidth, height: imageHeight }"
