@@ -22,6 +22,11 @@ const router = createRouter({
       name: 'konva-test',
       component: () => import('@/views/KonvaTestView.vue'),
     },
+    {
+      path: '/qr-test',
+      name: 'qr-test',
+      component: () => import('@/views/QRCodeView.vue'),
+    },
   ],
 })
 
