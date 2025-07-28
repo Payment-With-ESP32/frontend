@@ -12,7 +12,6 @@ import HelloWorld from './components/HelloWorld.vue'
 
       <nav>
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
         <RouterLink to="/manage">관리</RouterLink>
         <RouterLink to="/payment?mac=10:b4:1d:14:8a:a8">결제테스트</RouterLink>
         <RouterLink to="/generate-qr">QR 생성</RouterLink>
