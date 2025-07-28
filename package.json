@@ -13,6 +13,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@portone/browser-sdk": "^0.0.24",
     "@vueuse/integrations": "^13.5.0",
     "axios": "^1.10.0",
     "konva": "^9.3.22",
