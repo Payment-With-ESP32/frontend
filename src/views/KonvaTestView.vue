@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useImage } from 'vue-konva'
-import axiosInstance from '@/utils/axios-instance'
+import { axiosInstance } from '@/utils/axios-instance'
 import type { SlaveResponse, SlaveType } from '@/types/slave-type'
 import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
@@ -196,7 +196,6 @@ const updateMasterMac = async () => {
     await axiosInstance.post('/esp32/master', {
       toMac,
     })
-    console.log('change succeed')
   } catch (e) {
     console.error(e)
   }
@@ -207,7 +206,6 @@ const reconnectMaster = async () => {
     await axiosInstance.post(`/esp32/master`, {
       toMac: masterMacAddress.value,
     })
-    console.log('reconnect succeed')
   } catch (e) {
     console.error(e)
   }

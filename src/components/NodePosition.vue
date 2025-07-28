@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SlaveType } from '@/types/slave-type'
 import type Konva from 'konva'
-import axiosInstance from '@/utils/axios-instance'
+import { axiosInstance } from '@/utils/axios-instance'
 import { reactive } from 'vue'
 
 const props = defineProps({
