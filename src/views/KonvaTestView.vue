@@ -11,7 +11,6 @@ import { useRouter } from 'vue-router'
 const defaultImagePath = '/default.png'
 const imageSrc = ref<string>(defaultImagePath)
 const [image] = useImage(imageSrc)
-const [targetSrc] = useImage('/red-dot.png')
 
 const floorPlaneImageConfig = ref({})
 const floorImageSrcs = ref<string[]>([])
@@ -39,7 +38,6 @@ const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddre
 onMounted(async () => {
   const router = useRouter()
   const password = prompt('비밀번호를 입력해주세요')
-  console.log(password)
 
   try {
     await axiosInstance.post('/admin/login', { password })
@@ -86,6 +84,14 @@ watch(image, (img) => {
       x: 0,
       y: 0,
       height: imageHeight.value,
+      width: imageWidth,
+    }
+  } else {
+    floorPlaneImageConfig.value = {
+      image: '/default.png',
+      x: 0,
+      y: 0,
+      height: 400,
       width: imageWidth,
     }
   }
@@ -306,35 +312,29 @@ const rePassword = ref('')
       :config="{ width: imageWidth, height: imageHeight }"
       id="konva-root-stage"
       @click="() => (popupPosition = null)"
+      @tap="() => (popupPosition = null)"
     >
       <v-layer>
         <v-image v-if="image" :config="floorPlaneImageConfig"></v-image>
-        <div v-if="targetSrc">
-          <NodePosition
-            v-for="(slave, idx) in filteredSlaves"
-            :key="slave.macAddress"
-            :index="idx"
-            :info="slave"
-            :imgSrc="targetSrc"
-            :popupPosition="popupPosition"
-            @update:nodePosition="
-              (newPosition) => {
-                const index = slaves.findIndex((s) => s.macAddress === newPosition.macAddress)
-                if (index !== -1) {
-                  delete newPosition.macAddress
-                  slaves[index].position = { ...slaves[index].position, ...newPosition }
-                }
+        <NodePosition
+          v-for="slave in filteredSlaves"
+          :key="slave.macAddress"
+          :info="slave"
+          :popupPosition="popupPosition"
+          :selectedMacAddress="selectedMacAddress"
+          :floorImageSize="{ width: imageWidth, height: imageHeight }"
+          @update:nodePosition="
+            (newPosition) => {
+              const index = slaves.findIndex((s) => s.macAddress === newPosition.macAddress)
+              if (index !== -1) {
+                delete newPosition.macAddress
+                slaves[index].position = { ...slaves[index].position, ...newPosition }
               }
-            "
-            @update:popupPosition="(position) => (popupPosition = position)"
-            @update:targetMacAddress="
-              (macAddress) => {
-                selectedMacAddress = macAddress
-              }
-            "
-          />
-        </div>
-        "
+            }
+          "
+          @update:popupPosition="(position) => (popupPosition = position)"
+          @update:targetMacAddress="(macAddress) => (selectedMacAddress = macAddress)"
+        />
       </v-layer>
     </v-stage>
     <div
@@ -347,7 +347,7 @@ const rePassword = ref('')
         padding: 10px;
         color: black;
       "
-      :style="{ left: popupPosition.x + 10 + 'px', top: popupPosition.y + 10 + 'px' }"
+      :style="{ left: popupPosition.x + 'px', top: popupPosition.y + 'px' }"
     >
       <h3>MAC 주소: {{ selectedMacAddress }}</h3>
       <hr style="margin-top: 0.5em; margin-bottom: 0.5em" />
