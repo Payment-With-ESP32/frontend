@@ -20,6 +20,11 @@ onMounted(async () => {
       if (!macRegex.test(data.macAddress)) {
         throw Error('mac regex is not found')
       }
+      if (data.amount.total === 0) throw Error('amount is lower than 0')
+
+      await axiosInstance.post(`/esp32/${encodeURIComponent(data.macAddress)}`, {
+        time: data.amount.total / 1000,
+      })
     } catch (e) {
       console.error(e)
     }
