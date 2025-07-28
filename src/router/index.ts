@@ -15,19 +15,24 @@ const router = createRouter({
       component: () => import('@/views/AboutView.vue'),
     },
     {
-      path: '/konva-test',
-      name: 'konva-test',
-      component: () => import('@/views/KonvaTestView.vue'),
+      path: '/manage',
+      name: 'node-manage',
+      component: () => import('@/views/NodeManageView.vue'),
     },
     {
-      path: '/qr-test',
-      name: 'qr-test',
+      path: '/payment',
+      name: 'payment',
       component: () => import('@/views/PositionPurchaseView.vue'),
     },
     {
       path: '/payment-success',
       name: 'payment-success',
       component: () => import('@/views/PaymentSuccessView.vue'),
+    },
+    {
+      path: '/generate-qr',
+      name: 'generate-qr',
+      component: () => import('@/views/QRGenerationView.vue'),
     },
   ],
 })
