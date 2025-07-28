@@ -6,7 +6,7 @@ import type { SlaveResponse, SlaveType } from '@/types/slave-type'
 import NodePosition from '@/components/NodePosition.vue'
 import { macRegex } from '@/utils/regexes'
 import type { MasterMacResponse } from '@/types/master-mac'
-import { useRouter } from 'vue-router'
+import { usePageLogin } from '@/hooks/use-page-login'
 
 const defaultImagePath = '/default.png'
 const imageSrc = ref<string>(defaultImagePath)
@@ -36,16 +36,7 @@ const filteredSlaves = computed(() =>
 const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddress.value))
 
 onMounted(async () => {
-  const router = useRouter()
-  const password = prompt('비밀번호를 입력해주세요')
-
-  try {
-    await axiosInstance.post('/admin/login', { password })
-  } catch (e) {
-    console.error(e)
-    router.replace('/')
-    return
-  }
+  await usePageLogin()
 
   try {
     const { data } = await axiosInstance.get<SlaveResponse>('/esp32/slaves')

@@ -1,15 +1,14 @@
 <script setup lang="ts">
+import { usePageLogin } from '@/hooks/use-page-login'
 import type { SlaveResponse } from '@/types/slave-type'
 import { axiosInstance } from '@/utils/axios-instance'
 import { useQRCode } from '@vueuse/integrations/useQRCode'
 import { onMounted, ref, watch, type ShallowRef } from 'vue'
-import { useRouter } from 'vue-router'
 
 interface MacType {
   qr: ShallowRef<string>
   mac: string
 }
-const router = useRouter()
 
 const slaveMacs = ref<string[]>([])
 const qrs = ref<MacType[]>([])
@@ -24,15 +23,7 @@ watch([slaveMacs, baseURL], () => {
 })
 
 onMounted(async () => {
-  const password = prompt('비밀번호를 입력해주세요')
-
-  try {
-    await axiosInstance.post('/admin/login', { password })
-  } catch (e) {
-    console.error(e)
-    router.replace('/')
-    return
-  }
+  await usePageLogin()
 
   const { data } = await axiosInstance.get<SlaveResponse>('/esp32/slaves')
   slaveMacs.value = data.slaves.map((it) => (it.macAddress = it.macAddress.trim().toLowerCase()))
