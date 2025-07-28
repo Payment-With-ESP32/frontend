@@ -24,6 +24,11 @@ const router = createRouter({
       name: 'qr-test',
       component: () => import('@/views/PositionPurchaseView.vue'),
     },
+    {
+      path: '/payment-success',
+      name: 'payment-success',
+      component: () => import('@/views/PaymentSuccessView.vue'),
+    },
   ],
 })
 
