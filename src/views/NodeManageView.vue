@@ -264,10 +264,15 @@ const deleteImage = async () => {
 }
 
 const changeUserPosition = async () => {
-  await axiosInstance.put('/esp32/transfer', {
-    from: selectedMacAddress.value,
-    to: moveToMac.value,
-  })
+  await axiosInstance.put(
+    '/esp32/transfer',
+    {
+      from: selectedMacAddress.value,
+      to: moveToMac.value,
+    },
+    { timeout: 5000 },
+  )
+  moveToMac.value = ''
 }
 
 const origPassword = ref('')
@@ -369,8 +374,8 @@ const rePassword = ref('')
       <button @click="submitTime(0)">상시 켜짐</button><button @click="submitTime(-1)">끄기</button>
       <br />
       <h2>자리 이동</h2>
-      <select v-model="moveToMac">
-        <option v-for="slave in toMoveSlaves" :key="slave.macAddress">
+      <select v-model="moveToMac" @change="console.log(moveToMac)">
+        <option v-for="slave in toMoveSlaves" :key="slave.macAddress" :value="slave.macAddress">
           {{ slave.macAddress }} - {{ slave.position.floor }}
         </option>
       </select>
