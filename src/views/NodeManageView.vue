@@ -28,12 +28,16 @@ const toUpdateMasterMacAddress = ref<string>('')
 const toAppendTargetMacAddress = ref<string>('')
 const masterMacAddress = ref<string>('')
 const prelongTime = ref<number>(1)
+const moveToMac = ref<string>('')
 
 const macPlaceHolder = computed(() => `현재 MAC: ${masterMacAddress.value}`)
 const filteredSlaves = computed(() =>
   slaves.value.filter((slave) => slave.position.floor === floor.value),
 )
 const selectedMacURLEncoded = computed(() => encodeURIComponent(selectedMacAddress.value))
+const toMoveSlaves = computed(() =>
+  slaves.value.filter((slave) => slave.macAddress !== selectedMacAddress.value),
+)
 
 onMounted(async () => {
   await usePageLogin()
@@ -259,6 +263,13 @@ const deleteImage = async () => {
   }
 }
 
+const changeUserPosition = async () => {
+  await axiosInstance.put('/esp32/transfer', {
+    from: selectedMacAddress.value,
+    to: moveToMac.value,
+  })
+}
+
 const origPassword = ref('')
 const toPassword = ref('')
 const rePassword = ref('')
@@ -356,6 +367,14 @@ const rePassword = ref('')
       <button @click="submitTime(prelongTime)">연장</button>
       <br />
       <button @click="submitTime(0)">상시 켜짐</button><button @click="submitTime(-1)">끄기</button>
+      <br />
+      <h2>자리 이동</h2>
+      <select v-model="moveToMac">
+        <option v-for="slave in toMoveSlaves" :key="slave.macAddress">
+          {{ slave.macAddress }} - {{ slave.position.floor }}
+        </option>
+      </select>
+      <button @click="changeUserPosition()">이동</button>
     </div>
     <div>
       <div>
