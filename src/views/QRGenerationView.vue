@@ -17,7 +17,7 @@ const baseURL = ref<string>('http://192.168.0.7:8080')
 
 watch([slaveMacs, baseURL], () => {
   qrs.value = slaveMacs.value.map((mac) => ({
-    qr: useQRCode(`${baseURL.value}/qr-test?mac=${mac}`),
+    qr: useQRCode(`${baseURL.value}/payment?mac=${mac}`),
     mac,
   }))
 })
